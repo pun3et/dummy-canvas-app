@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dummy Canvas App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        h1 {
+            color: #0070d2;
+        }
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .label {
+            font-weight: bold;
+            color: #0070d2;
+        }
+        button {
+            background: #0070d2;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #005fb2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Dummy Canvas App</h1>
+        <p>This is a placeholder app to verify communication between Salesforce (LWC/Aura via LMS) and the Canvas app.</p>
+
+        <div class="section">
+            <span class="label">Canvas Status:</span>
+            <p id="status">Initializing Canvas SDK...</p>
+        </div>
+
+        <div class="section">
+            <span class="label">User Context:</span>
+            <pre id="userContext">Waiting for data...</pre>
+        </div>
+
+        <div class="section">
+            <span class="label">Custom Parameters (from LWC/Aura):</span>
+            <pre id="customParams">Waiting for data...</pre>
+        </div>
+
+        <div class="section">
+            <span class="label">Full Signed Request Payload:</span>
+            <pre id="fullPayload">Waiting for data...</pre>
+            <button onclick="refreshContext()">🔄 Refresh Context</button>
+        </div>
+
+        <div class="section">
+            <span class="label">Event Log:</span>
+            <pre id="eventLog"></pre>
+        </div>
+    </div>
+
+    <!-- Salesforce Canvas SDK -->
+    <script src="https://login.salesforce.com/canvas/sdk/js/56.0/canvas-all.js"></script>
+
+    <script>
+        function log(message) {
+            const logEl = document.getElementById('eventLog');
+            const time = new Date().toLocaleTimeString();
+            logEl.textContent += `[${time}] ${message}\n`;
+            console.log(message);
+        }
+
+        function updateUI(payload) {
+            try {
+                document.getElementById('status').textContent = '✅ Canvas SDK Initialized Successfully';
+                document.getElementById('userContext').textContent =
+                    JSON.stringify(payload.context?.user || {}, null, 2);
+                document.getElementById('customParams').textContent =
+                    JSON.stringify(payload.context?.environment?.parameters || {}, null, 2);
+                document.getElementById('fullPayload').textContent =
+                    JSON.stringify(payload, null, 2);
+                log('Canvas context loaded successfully.');
+            } catch (e) {
+                log('Error parsing payload: ' + e.message);
+            }
+        }
+
+        function refreshContext() {
+            log('Refreshing Canvas context...');
+            Sfdc.canvas.client.refreshSignedRequest(function(data) {
+                if (data.status === 200) {
+                    const signedRequest = data.payload.response;
+                    const parts = signedRequest.split('.');
+                    const payload = JSON.parse(Sfdc.canvas.decode(parts[1]));
+                    updateUI(payload);
+                } else {
+                    log('Failed to refresh signed request. Status: ' + data.status);
+                }
+            });
+        }
+
+        // Initialize Canvas SDK on page load
+        Sfdc.canvas(function() {
+            log('Canvas SDK ready.');
+            Sfdc.canvas.client.refreshSignedRequest(function(data) {
+                if (data.status === 200) {
+                    try {
+                        const signedRequest = data.payload.response;
+                        const parts = signedRequest.split('.');
+                        const payload = JSON.parse(Sfdc.canvas.decode(parts[1]));
+                        updateUI(payload);
+                    } catch (err) {
+                        log('Error decoding signed request: ' + err.message);
+                    }
+                } else {
+                    document.getElementById('status').textContent =
+                        '⚠️ Could not retrieve signed request. Are you running this inside Salesforce Canvas?';
+                    log('Status: ' + data.status);
+                }
+            });
+        });
+
+        // Listen for postMessage events (just in case)
+        window.addEventListener('message', function(event) {
+            log('postMessage received: ' + JSON.stringify(event.data));
+        });
+    </script>
+</body>
+</html>
