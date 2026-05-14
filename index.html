@@ -18,7 +18,6 @@
             padding: 25px;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            max-width: 100%;
         }
         .status-box {
             padding: 15px;
@@ -27,16 +26,8 @@
             font-weight: bold;
             text-align: center;
         }
-        .status-waiting {
-            background: #fff4ce;
-            color: #b76e00;
-            border: 1px solid #ffd966;
-        }
-        .status-received {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
+        .status-waiting { background: #fff4ce; color: #b76e00; border: 1px solid #ffd966; }
+        .status-received { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .message-card {
             background: #e3f2fd;
             border-left: 4px solid #0070d2;
@@ -44,15 +35,8 @@
             margin: 10px 0;
             border-radius: 4px;
         }
-        .message-card.latest {
-            background: #fff3cd;
-            border-left-color: #ffc107;
-        }
-        .message-meta {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 8px;
-        }
+        .message-card.latest { background: #fff3cd; border-left-color: #ffc107; }
+        .message-meta { font-size: 12px; color: #666; margin-bottom: 8px; }
         pre {
             background: #1e1e1e;
             color: #d4d4d4;
@@ -62,7 +46,6 @@
             white-space: pre-wrap;
             word-wrap: break-word;
             font-size: 13px;
-            margin: 5px 0;
         }
         .counter {
             display: inline-block;
@@ -73,17 +56,22 @@
             font-size: 14px;
             font-weight: bold;
         }
-        .clear-btn {
-            background: #c23934;
+        button {
+            background: #0070d2;
             color: white;
             border: none;
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-            float: right;
+            margin: 5px;
         }
+        button:hover { background: #005fb2; }
+        .clear-btn { background: #c23934; }
         .clear-btn:hover { background: #a02b2b; }
+        .send-btn { background: #2e844a; }
+        .send-btn:hover { background: #1e6b35; }
+        .info-row { margin: 5px 0; font-size: 14px; word-break: break-all; }
         .log-section {
             margin-top: 20px;
             padding: 15px;
@@ -91,48 +79,36 @@
             border-radius: 6px;
             border: 1px solid #dee2e6;
         }
-        .info-row {
-            margin: 5px 0;
-            font-size: 14px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📥 Canvas App - Message Receiver</h1>
-        <p>This page is hosted on GitHub Pages and embedded inside Salesforce Canvas. It listens for messages from Salesforce.</p>
+        <p>Hosted on GitHub Pages, embedded inside Salesforce Canvas.</p>
         
-        <div class="info-row">
-            <strong>Page URL:</strong> <span id="pageUrl"></span>
-        </div>
-        <div class="info-row">
-            <strong>Parent Origin:</strong> <span id="parentOrigin"></span>
-        </div>
-        <div class="info-row">
-            <strong>Page Loaded At:</strong> <span id="loadTime"></span>
-        </div>
+        <div class="info-row"><strong>Page URL:</strong> <span id="pageUrl"></span></div>
+        <div class="info-row"><strong>Parent Origin:</strong> <span id="parentOrigin"></span></div>
+        <div class="info-row"><strong>Target Origin (parsed):</strong> <span id="targetOrigin"></span></div>
+        <div class="info-row"><strong>Instance ID:</strong> <span id="instanceId"></span></div>
+        <div class="info-row"><strong>Page Loaded At:</strong> <span id="loadTime"></span></div>
         
-        <!-- Status Indicator -->
         <div id="statusBox" class="status-box status-waiting">
             ⏳ Waiting for messages from Salesforce...
         </div>
         
-        <!-- Messages Counter & Clear -->
         <div style="margin: 20px 0;">
             <span class="counter" id="messageCounter">0 messages received</span>
+            <button class="send-btn" onclick="sendBackToSalesforce()">📤 Send Message Back to SFDC</button>
             <button class="clear-btn" onclick="clearMessages()">🗑️ Clear All</button>
         </div>
         
-        <!-- Latest Message -->
         <div id="latestMessageContainer"></div>
         
-        <!-- Message History -->
         <h2>📜 Message History</h2>
         <div id="messageHistory">
-            <p style="color:#888; font-style:italic;">No messages yet. Trigger a message from Salesforce to see it appear here.</p>
+            <p style="color:#888; font-style:italic;">No messages yet.</p>
         </div>
         
-        <!-- Debug Log -->
         <div class="log-section">
             <h2>🔍 Debug Log</h2>
             <pre id="debugLog" style="max-height:300px; overflow-y:auto;"></pre>
@@ -145,17 +121,60 @@
         // ==============================================
         let messageCount = 0;
         let messageHistory = [];
-
+        let targetOrigin = '*'; // Will be set from URL
+        let instanceId = '';
+        
         // ==============================================
-        // INIT
+        // PARSE URL FOR TARGET ORIGIN
+        // ==============================================
+        function parseUrl() {
+            const url = window.location.href;
+            
+            // Parse query params and hash
+            const queryAndHash = url.split('?')[1] || '';
+            const allParams = new URLSearchParams(queryAndHash.replace('#', '&'));
+            
+            // Try to extract target_origin
+            let origin = allParams.get('target_origin');
+            
+            // Fallback: parse from hash
+            if (!origin && window.location.hash) {
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                origin = hashParams.get('target_origin');
+            }
+            
+            // Fallback: parse from full URL string
+            if (!origin) {
+                const match = url.match(/target_origin=([^&]+)/);
+                if (match) origin = decodeURIComponent(match[1]);
+            }
+            
+            const instMatch = url.match(/instance_id=([^&]+)/);
+            const inst = instMatch ? decodeURIComponent(instMatch[1]) : '';
+            
+            return { 
+                targetOrigin: origin || '*',
+                instanceId: inst
+            };
+        }
+        
+        const parsed = parseUrl();
+        targetOrigin = parsed.targetOrigin;
+        instanceId = parsed.instanceId;
+        
+        // ==============================================
+        // INIT UI
         // ==============================================
         document.getElementById('pageUrl').textContent = window.location.href;
-        document.getElementById('parentOrigin').textContent = 
-            (document.referrer || 'Direct access').substring(0, 80);
+        document.getElementById('parentOrigin').textContent = document.referrer || 'N/A';
+        document.getElementById('targetOrigin').textContent = targetOrigin;
+        document.getElementById('instanceId').textContent = instanceId;
         document.getElementById('loadTime').textContent = new Date().toLocaleString();
         
-        log('🚀 Canvas page loaded successfully');
-        log('📡 Listening for postMessage events...');
+        log('🚀 Canvas page loaded');
+        log('🎯 Target Origin: ' + targetOrigin);
+        log('🆔 Instance ID: ' + instanceId);
+        log('📡 Listening for messages...');
 
         // ==============================================
         // UTILITY FUNCTIONS
@@ -185,9 +204,9 @@
             messageHistory = [];
             document.getElementById('latestMessageContainer').innerHTML = '';
             document.getElementById('messageHistory').innerHTML = 
-                '<p style="color:#888; font-style:italic;">Messages cleared.</p>';
+                '<p style="color:#888;">Messages cleared.</p>';
             updateCounter();
-            log('🗑️ Messages cleared');
+            log('🗑️ Cleared');
         }
         
         function renderLatestMessage(data) {
@@ -196,9 +215,7 @@
                 <h2>🎯 Latest Message</h2>
                 <div class="message-card latest">
                     <div class="message-meta">
-                        Received at ${new Date().toLocaleTimeString()} | 
-                        Type: <strong>${data.type || 'Unknown'}</strong> | 
-                        Source: <strong>${data.payload?.source || 'N/A'}</strong>
+                        Received at ${new Date().toLocaleTimeString()}
                     </div>
                     <pre>${JSON.stringify(data, null, 2)}</pre>
                 </div>
@@ -207,49 +224,68 @@
         
         function renderMessageHistory() {
             const historyEl = document.getElementById('messageHistory');
-            
             if (messageHistory.length === 0) {
-                historyEl.innerHTML = '<p style="color:#888;">No messages yet.</p>';
+                historyEl.innerHTML = '<p style="color:#888;">No messages.</p>';
                 return;
             }
-            
             historyEl.innerHTML = messageHistory.map((msg, idx) => `
                 <div class="message-card">
                     <div class="message-meta">
-                        #${messageHistory.length - idx} | 
-                        ${msg.time} | 
-                        Type: <strong>${msg.data.type || 'Unknown'}</strong>
+                        #${messageHistory.length - idx} | ${msg.time}
                     </div>
                     <pre>${JSON.stringify(msg.data, null, 2)}</pre>
                 </div>
             `).join('');
         }
+        
+        // ==============================================
+        // SEND MESSAGE BACK TO SALESFORCE
+        // ==============================================
+        function sendBackToSalesforce() {
+            const message = {
+                type: 'CANVAS_TO_SFDC',
+                source: 'GitHub Canvas App',
+                instanceId: instanceId,
+                payload: {
+                    text: 'Hello from Canvas App!',
+                    timestamp: new Date().toISOString(),
+                    random: Math.random().toString(36).substring(7)
+                }
+            };
+            
+            try {
+                // Send to parent (Salesforce)
+                window.parent.postMessage(message, targetOrigin);
+                log('📤 Sent message to parent (Salesforce): ' + targetOrigin);
+                log('   Payload: ' + JSON.stringify(message));
+            } catch (e) {
+                log('❌ Error sending: ' + e.message);
+            }
+        }
 
         // ==============================================
-        // MAIN: LISTEN FOR MESSAGES
+        // LISTEN FOR MESSAGES FROM SALESFORCE
         // ==============================================
         window.addEventListener('message', function(event) {
-            log(`📨 Message from origin "${event.origin}"`);
+            log(`📨 Message from "${event.origin}"`);
             
-            // Optional: Log all messages (even non-SFDC ones for debugging)
             try {
                 const dataStr = JSON.stringify(event.data).substring(0, 200);
                 log(`   Data: ${dataStr}`);
             } catch(e) {
-                log('   Data: (non-serializable)');
+                log('   Data: (non-serializable, possibly Canvas SDK internal)');
+                return;
             }
             
-            // Process SFDC messages
-            if (event.data && event.data.type === 'SFDC_MESSAGE') {
+            // Process SFDC messages (any type that we recognize)
+            if (event.data && (event.data.type === 'SFDC_MESSAGE' || event.data.type === 'SFDC_TO_CANVAS')) {
                 messageCount++;
-                log(`✅ SFDC message #${messageCount} processed`);
+                log(`✅ Message #${messageCount} processed!`);
                 
-                // Update UI
                 updateStatus(true);
                 updateCounter();
                 renderLatestMessage(event.data);
                 
-                // Add to history
                 messageHistory.unshift({
                     time: new Date().toLocaleTimeString(),
                     data: event.data
@@ -258,7 +294,21 @@
             }
         }, false);
         
-        log('✅ Message listener attached. Ready to receive!');
+        log('✅ Listener attached. Ready!');
+        
+        // Send a "ready" signal to parent so SFDC knows the Canvas app is alive
+        setTimeout(function() {
+            try {
+                window.parent.postMessage({
+                    type: 'CANVAS_READY',
+                    instanceId: instanceId,
+                    timestamp: new Date().toISOString()
+                }, targetOrigin);
+                log('📡 Sent CANVAS_READY signal to parent');
+            } catch (e) {
+                log('❌ Could not send ready signal: ' + e.message);
+            }
+        }, 1000);
     </script>
 </body>
 </html>
