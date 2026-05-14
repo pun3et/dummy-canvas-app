@@ -2,153 +2,297 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dummy Canvas App</title>
+    <title>Dummy Canvas App - LMS Listener</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             margin: 20px;
             background-color: #f4f6f9;
             color: #333;
         }
-        h1 {
-            color: #0070d2;
-        }
+        h1 { color: #0070d2; }
+        h2 { color: #16325c; margin-top: 25px; }
         .container {
             background: #fff;
-            padding: 20px;
+            padding: 25px;
             border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .section {
             margin-top: 20px;
             padding: 15px;
-            border: 1px solid #ddd;
+            border: 1px solid #dddbda;
             border-radius: 6px;
             background: #fafafa;
         }
+        .status-success { color: #2e844a; font-weight: bold; }
+        .status-warning { color: #fe9339; font-weight: bold; }
+        .status-error   { color: #c23934; font-weight: bold; }
         pre {
             background: #1e1e1e;
             color: #d4d4d4;
-            padding: 10px;
+            padding: 12px;
             border-radius: 6px;
             overflow-x: auto;
             white-space: pre-wrap;
             word-wrap: break-word;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
         }
-        .label {
+        .label { font-weight: bold; color: #0070d2; }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
             font-weight: bold;
-            color: #0070d2;
+            margin-left: 8px;
         }
+        .badge-blue { background: #0070d2; color: white; }
+        .badge-green { background: #2e844a; color: white; }
         button {
             background: #0070d2;
             color: white;
             border: none;
-            padding: 8px 14px;
+            padding: 10px 16px;
             border-radius: 4px;
             cursor: pointer;
-            margin-top: 10px;
+            margin: 5px 5px 5px 0;
+            font-size: 14px;
         }
-        button:hover {
-            background: #005fb2;
+        button:hover { background: #005fb2; }
+        .log-entry {
+            border-bottom: 1px dotted #ccc;
+            padding: 5px 0;
+            font-size: 13px;
+        }
+        .log-entry:last-child { border-bottom: none; }
+        .log-time { color: #888; font-size: 11px; margin-right: 8px; }
+        .latest-message {
+            border-left: 4px solid #2e844a;
+            background: #e8f5e9;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Dummy Canvas App</h1>
-        <p>This is a placeholder app to verify communication between Salesforce (LWC/Aura via LMS) and the Canvas app.</p>
+        <h1>🚀 Dummy Canvas App — LMS Listener</h1>
+        <p>Hosted on GitHub Pages. Receiving messages from Salesforce Aura via Canvas SDK.</p>
 
+        <!-- SDK Status -->
         <div class="section">
-            <span class="label">Canvas Status:</span>
-            <p id="status">Initializing Canvas SDK...</p>
+            <span class="label">Canvas SDK Status:</span>
+            <p id="sdkStatus" class="status-warning">Loading SDK...</p>
         </div>
 
+        <!-- Subscription Status -->
         <div class="section">
-            <span class="label">User Context:</span>
-            <pre id="userContext">Waiting for data...</pre>
+            <span class="label">Subscription Status:</span>
+            <p id="subStatus" class="status-warning">Not subscribed yet</p>
         </div>
 
-        <div class="section">
-            <span class="label">Custom Parameters (from LWC/Aura):</span>
-            <pre id="customParams">Waiting for data...</pre>
+        <!-- Latest LMS Message -->
+        <div class="section latest-message" id="latestMessageSection" style="display:none;">
+            <span class="label">📩 Latest LMS Message:</span>
+            <span class="badge badge-green" id="messageCount">0 received</span>
+            <pre id="latestMessage">No message yet...</pre>
         </div>
 
+        <!-- All Messages Log -->
         <div class="section">
-            <span class="label">Full Signed Request Payload:</span>
-            <pre id="fullPayload">Waiting for data...</pre>
-            <button onclick="refreshContext()">🔄 Refresh Context</button>
+            <span class="label">📜 Message History:</span>
+            <div id="messageHistory" style="max-height: 250px; overflow-y: auto; margin-top: 10px;">
+                <em style="color:#888;">No messages received yet. Publish an LMS message from Salesforce.</em>
+            </div>
         </div>
 
+        <!-- User Context (from Signed Request, if available) -->
         <div class="section">
-            <span class="label">Event Log:</span>
-            <pre id="eventLog"></pre>
+            <span class="label">👤 User Context:</span>
+            <pre id="userContext">Not available (using GET access method)</pre>
+        </div>
+
+        <!-- Debug Tools -->
+        <div class="section">
+            <span class="label">🛠️ Debug Tools:</span>
+            <br><br>
+            <button onclick="testSubscription()">🔄 Re-Subscribe</button>
+            <button onclick="clearHistory()">🗑️ Clear History</button>
+            <button onclick="testPostMessage()">📤 Test postMessage Listener</button>
+        </div>
+
+        <!-- Event Log -->
+        <div class="section">
+            <span class="label">🔍 Event Log (Console):</span>
+            <pre id="eventLog" style="max-height:200px;"></pre>
         </div>
     </div>
 
     <!-- Salesforce Canvas SDK -->
-    <script src="https://https://ciscosales--dev.sandbox.my.salesforce.com/canvas/sdk/js/61.0/canvas-all.js"></script>
+    <!-- Use test.salesforce.com for sandbox, login.salesforce.com for production -->
+    <script src="https://test.salesforce.com/canvas/sdk/js/60.0/canvas-all.js"></script>
 
     <script>
-        function log(message) {
+        // ============================================================
+        // GLOBAL STATE
+        // ============================================================
+        let messageCount = 0;
+        let messageHistory = [];
+
+        // ============================================================
+        // UTILITY FUNCTIONS
+        // ============================================================
+        function log(message, type = 'info') {
             const logEl = document.getElementById('eventLog');
             const time = new Date().toLocaleTimeString();
-            logEl.textContent += `[${time}] ${message}\n`;
-            console.log(message);
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            logEl.textContent += `[${time}] ${prefix} ${message}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`${prefix} ${message}`);
         }
 
-        function updateUI(payload) {
-            try {
-                document.getElementById('status').textContent = '✅ Canvas SDK Initialized Successfully';
-                document.getElementById('userContext').textContent =
-                    JSON.stringify(payload.context?.user || {}, null, 2);
-                document.getElementById('customParams').textContent =
-                    JSON.stringify(payload.context?.environment?.parameters || {}, null, 2);
-                document.getElementById('fullPayload').textContent =
-                    JSON.stringify(payload, null, 2);
-                log('Canvas context loaded successfully.');
-            } catch (e) {
-                log('Error parsing payload: ' + e.message);
+        function updateSdkStatus(text, type) {
+            const el = document.getElementById('sdkStatus');
+            el.textContent = text;
+            el.className = `status-${type}`;
+        }
+
+        function updateSubStatus(text, type) {
+            const el = document.getElementById('subStatus');
+            el.textContent = text;
+            el.className = `status-${type}`;
+        }
+
+        function displayLatestMessage(payload) {
+            messageCount++;
+            document.getElementById('latestMessageSection').style.display = 'block';
+            document.getElementById('messageCount').textContent = `${messageCount} received`;
+            document.getElementById('latestMessage').textContent = 
+                JSON.stringify(payload, null, 2);
+        }
+
+        function addToHistory(source, payload) {
+            const time = new Date().toLocaleTimeString();
+            messageHistory.unshift({ time, source, payload });
+            
+            const historyEl = document.getElementById('messageHistory');
+            historyEl.innerHTML = messageHistory.map(msg => `
+                <div class="log-entry">
+                    <span class="log-time">[${msg.time}]</span>
+                    <span class="badge badge-blue">${msg.source}</span>
+                    <pre style="margin-top:5px; max-height:100px;">${JSON.stringify(msg.payload, null, 2)}</pre>
+                </div>
+            `).join('');
+        }
+
+        // ============================================================
+        // CANVAS SDK SUBSCRIPTION (Approach 1)
+        // ============================================================
+        function subscribeToCanvas() {
+            if (typeof Sfdc === 'undefined' || !Sfdc.canvas) {
+                log('Canvas SDK not loaded yet', 'error');
+                updateSdkStatus('❌ SDK not loaded', 'error');
+                return;
             }
-        }
 
-        function refreshContext() {
-            log('Refreshing Canvas context...');
-            Sfdc.canvas.client.refreshSignedRequest(function(data) {
-                if (data.status === 200) {
-                    const signedRequest = data.payload.response;
-                    const parts = signedRequest.split('.');
-                    const payload = JSON.parse(Sfdc.canvas.decode(parts[1]));
-                    updateUI(payload);
-                } else {
-                    log('Failed to refresh signed request. Status: ' + data.status);
+            log('Initializing Canvas SDK...');
+            updateSdkStatus('✅ Canvas SDK Loaded', 'success');
+
+            Sfdc.canvas(function() {
+                log('Canvas SDK ready, attempting subscription...');
+
+                try {
+                    // Subscribe to messages from Aura
+                    Sfdc.canvas.client.subscribe({
+                        name: 'lmsParameters',
+                        onData: function(event) {
+                            log('📩 LMS message received via Canvas SDK!', 'success');
+                            console.log('Full event:', event);
+                            
+                            const payload = event.payload || event;
+                            displayLatestMessage(payload);
+                            addToHistory('Canvas SDK', payload);
+                        }
+                    });
+
+                    log('✅ Subscribed to "lmsParameters" channel', 'success');
+                    updateSubStatus('✅ Subscribed via Canvas SDK', 'success');
+
+                    // Also try to fetch user context (works only with POST/Signed Request)
+                    Sfdc.canvas.client.refreshSignedRequest(function(data) {
+                        if (data.status === 200) {
+                            try {
+                                const parts = data.payload.response.split('.');
+                                const payload = JSON.parse(Sfdc.canvas.decode(parts[1]));
+                                document.getElementById('userContext').textContent = 
+                                    JSON.stringify(payload.context?.user || {}, null, 2);
+                                log('User context loaded', 'success');
+                            } catch (e) {
+                                log('Error parsing signed request: ' + e.message, 'error');
+                            }
+                        } else {
+                            log('No signed request available (expected for GET mode)', 'info');
+                        }
+                    });
+
+                } catch (e) {
+                    log('Subscription error: ' + e.message, 'error');
+                    updateSubStatus('❌ Subscription failed', 'error');
                 }
             });
         }
 
-        // Initialize Canvas SDK on page load
-        Sfdc.canvas(function() {
-            log('Canvas SDK ready.');
-            Sfdc.canvas.client.refreshSignedRequest(function(data) {
-                if (data.status === 200) {
-                    try {
-                        const signedRequest = data.payload.response;
-                        const parts = signedRequest.split('.');
-                        const payload = JSON.parse(Sfdc.canvas.decode(parts[1]));
-                        updateUI(payload);
-                    } catch (err) {
-                        log('Error decoding signed request: ' + err.message);
-                    }
-                } else {
-                    document.getElementById('status').textContent =
-                        '⚠️ Could not retrieve signed request. Are you running this inside Salesforce Canvas?';
-                    log('Status: ' + data.status);
-                }
-            });
+        // ============================================================
+        // FALLBACK: NATIVE postMessage LISTENER
+        // ============================================================
+        window.addEventListener('message', function(event) {
+            // Log all incoming messages for debugging
+            log(`postMessage from ${event.origin}: ${JSON.stringify(event.data).substring(0, 100)}`);
+            
+            // Filter for LMS-style messages
+            if (event.data && event.data.type === 'LMS_PARAMS') {
+                log('📩 LMS message received via postMessage!', 'success');
+                const payload = event.data.payload;
+                displayLatestMessage(payload);
+                addToHistory('postMessage', payload);
+            }
         });
 
-        // Listen for postMessage events (just in case)
-        window.addEventListener('message', function(event) {
-            log('postMessage received: ' + JSON.stringify(event.data));
+        // ============================================================
+        // DEBUG TOOL FUNCTIONS
+        // ============================================================
+        function testSubscription() {
+            log('Re-subscribing manually...');
+            subscribeToCanvas();
+        }
+
+        function clearHistory() {
+            messageHistory = [];
+            messageCount = 0;
+            document.getElementById('messageHistory').innerHTML = 
+                '<em style="color:#888;">History cleared.</em>';
+            document.getElementById('latestMessageSection').style.display = 'none';
+            document.getElementById('messageCount').textContent = '0 received';
+            log('History cleared');
+        }
+
+        function testPostMessage() {
+            log('Sending test postMessage to self for verification...');
+            window.postMessage({
+                type: 'LMS_PARAMS',
+                payload: { test: 'Self-test message', timestamp: Date.now() }
+            }, '*');
+        }
+
+        // ============================================================
+        // INITIALIZE ON LOAD
+        // ============================================================
+        window.addEventListener('load', function() {
+            log('Page loaded, starting Canvas SDK initialization...');
+            
+            // Give SDK a moment to load
+            setTimeout(subscribeToCanvas, 500);
         });
     </script>
 </body>
