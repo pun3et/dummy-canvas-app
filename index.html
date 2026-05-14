@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Canvas App - Message Receiver</title>
+    <title>Canvas App - SDK Receiver</title>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f4f6f9; color: #333; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f4f6f9; }
         h1 { color: #0070d2; margin-top: 0; }
         h2 { color: #16325c; }
         .container { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .status-box { padding: 15px; border-radius: 6px; margin: 15px 0; font-weight: bold; text-align: center; }
-        .status-waiting { background: #fff4ce; color: #b76e00; border: 1px solid #ffd966; }
-        .status-received { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-waiting { background: #fff4ce; color: #b76e00; }
+        .status-received { background: #d4edda; color: #155724; }
         .message-card { background: #e3f2fd; border-left: 4px solid #0070d2; padding: 15px; margin: 10px 0; border-radius: 4px; }
         .message-card.latest { background: #fff3cd; border-left-color: #ffc107; }
         pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; }
@@ -27,8 +27,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>📥 Canvas App - SDK Receiver</h1>
-        <p>Using Canvas SDK for secure cross-origin messaging.</p>
+        <h1>📥 Canvas App - SDK Subscriber</h1>
+        <p>Using <code>Sfdc.canvas.client.subscribe</code> to receive messages from Salesforce.</p>
         
         <div class="info-row"><strong>SDK Status:</strong> <span id="sdkStatus">Loading...</span></div>
         <div class="info-row"><strong>Subscription:</strong> <span id="subStatus">Not subscribed</span></div>
@@ -63,7 +63,7 @@
             const logEl = document.getElementById('debugLog');
             const time = new Date().toLocaleTimeString();
             logEl.textContent = `[${time}] ${msg}\n` + logEl.textContent;
-            console.log(`[${time}] ${msg}`);
+            console.log(`[Canvas] ${msg}`);
         }
         
         function updateStatus(received) {
@@ -74,48 +74,34 @@
             }
         }
         
-        function updateCounter() {
-            document.getElementById('messageCounter').textContent = messageCount + ' received';
-        }
-        
         function clearMessages() {
             messageCount = 0;
             messageHistory = [];
             document.getElementById('latestMessageContainer').innerHTML = '';
             document.getElementById('messageHistory').innerHTML = '<p style="color:#888;">Cleared.</p>';
-            updateCounter();
-        }
-        
-        function renderLatest(data) {
-            const container = document.getElementById('latestMessageContainer');
-            container.innerHTML = `
-                <h2>🎯 Latest Message</h2>
-                <div class="message-card latest">
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                </div>`;
-        }
-        
-        function renderHistory() {
-            const el = document.getElementById('messageHistory');
-            if (messageHistory.length === 0) {
-                el.innerHTML = '<p style="color:#888;">No messages.</p>';
-                return;
-            }
-            el.innerHTML = messageHistory.map((msg, idx) => `
-                <div class="message-card">
-                    <div style="font-size:12px;color:#666;">#${messageHistory.length - idx} | ${msg.time}</div>
-                    <pre>${JSON.stringify(msg.data, null, 2)}</pre>
-                </div>`).join('');
+            document.getElementById('messageCounter').textContent = '0 received';
         }
         
         function processMessage(data) {
             messageCount++;
             log('✅ Message #' + messageCount + ' processed');
             updateStatus(true);
-            updateCounter();
-            renderLatest(data);
+            document.getElementById('messageCounter').textContent = messageCount + ' received';
+            
+            document.getElementById('latestMessageContainer').innerHTML = `
+                <h2>🎯 Latest Message</h2>
+                <div class="message-card latest">
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>`;
+            
             messageHistory.unshift({ time: new Date().toLocaleTimeString(), data: data });
-            renderHistory();
+            
+            const historyEl = document.getElementById('messageHistory');
+            historyEl.innerHTML = messageHistory.map((msg, idx) => `
+                <div class="message-card">
+                    <div style="font-size:12px;color:#666;">#${messageHistory.length - idx} | ${msg.time}</div>
+                    <pre>${JSON.stringify(msg.data, null, 2)}</pre>
+                </div>`).join('');
         }
         
         function sendBackToSalesforce() {
@@ -158,28 +144,25 @@
             Sfdc.canvas(function() {
                 log('✅ Canvas SDK ready');
                 
-                // Subscribe to messages from Salesforce parent
-                Sfdc.canvas.client.subscribe(null, [{
-                    name: 'sfdc.canvasMessage',
-                    onData: function(event) {
-                        log('📨 Received via Canvas SDK!');
-                        log('   Data: ' + JSON.stringify(event).substring(0, 100));
-                        processMessage(event);
-                    }
-                }]);
-                
-                document.getElementById('subStatus').textContent = '✅ Subscribed';
-                log('✅ Subscribed to "sfdc.canvasMessage"');
+                // Subscribe to messages from Salesforce
+                try {
+                    Sfdc.canvas.client.subscribe(null, [{
+                        name: 'sfdc.canvasMessage',
+                        onData: function(event) {
+                            log('📨 Received via Canvas SDK!');
+                            log('   Data: ' + JSON.stringify(event).substring(0, 100));
+                            processMessage(event);
+                        }
+                    }]);
+                    
+                    document.getElementById('subStatus').textContent = '✅ Subscribed';
+                    log('✅ Subscribed to "sfdc.canvasMessage"');
+                } catch (e) {
+                    log('❌ Subscribe error: ' + e.message);
+                    document.getElementById('subStatus').textContent = '❌ Failed';
+                }
             });
         }
-        
-        // Also keep the postMessage listener as fallback
-        window.addEventListener('message', function(event) {
-            if (event.data && event.data.type === 'SFDC_MESSAGE') {
-                log('📨 Received via postMessage fallback');
-                processMessage(event.data.payload);
-            }
-        }, false);
         
         log('🚀 Page loaded, initializing...');
         initSDK();
