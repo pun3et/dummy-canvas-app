@@ -4,110 +4,48 @@
     <meta charset="UTF-8">
     <title>Canvas App - Message Receiver</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f4f6f9;
-            color: #333;
-        }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f4f6f9; color: #333; }
         h1 { color: #0070d2; margin-top: 0; }
         h2 { color: #16325c; }
-        .container {
-            background: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .status-box {
-            padding: 15px;
-            border-radius: 6px;
-            margin: 15px 0;
-            font-weight: bold;
-            text-align: center;
-        }
+        .container { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .status-box { padding: 15px; border-radius: 6px; margin: 15px 0; font-weight: bold; text-align: center; }
         .status-waiting { background: #fff4ce; color: #b76e00; border: 1px solid #ffd966; }
         .status-received { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .message-card {
-            background: #e3f2fd;
-            border-left: 4px solid #0070d2;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 4px;
-        }
+        .message-card { background: #e3f2fd; border-left: 4px solid #0070d2; padding: 15px; margin: 10px 0; border-radius: 4px; }
         .message-card.latest { background: #fff3cd; border-left-color: #ffc107; }
-        .message-meta { font-size: 12px; color: #666; margin-bottom: 8px; }
-        pre {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 12px;
-            border-radius: 6px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 13px;
-        }
-        .counter {
-            display: inline-block;
-            background: #0070d2;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        button {
-            background: #0070d2;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin: 5px;
-        }
-        button:hover { background: #005fb2; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; }
+        .counter { display: inline-block; background: #0070d2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; }
+        button { background: #0070d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin: 5px; }
         .clear-btn { background: #c23934; }
-        .clear-btn:hover { background: #a02b2b; }
         .send-btn { background: #2e844a; }
-        .send-btn:hover { background: #1e6b35; }
         .info-row { margin: 5px 0; font-size: 14px; word-break: break-all; }
-        .log-section {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 6px;
-            border: 1px solid #dee2e6;
-        }
+        .log-section { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6; }
     </style>
+    
+    <!-- Canvas SDK -->
+    <script src="https://test.salesforce.com/canvas/sdk/js/60.0/canvas-all.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>📥 Canvas App - Message Receiver</h1>
-        <p>Hosted on GitHub Pages, embedded inside Salesforce Canvas.</p>
+        <h1>📥 Canvas App - SDK Receiver</h1>
+        <p>Using Canvas SDK for secure cross-origin messaging.</p>
         
-        <div class="info-row"><strong>Page URL:</strong> <span id="pageUrl"></span></div>
-        <div class="info-row"><strong>Parent Origin:</strong> <span id="parentOrigin"></span></div>
-        <div class="info-row"><strong>Target Origin (parsed):</strong> <span id="targetOrigin"></span></div>
-        <div class="info-row"><strong>Instance ID:</strong> <span id="instanceId"></span></div>
-        <div class="info-row"><strong>Page Loaded At:</strong> <span id="loadTime"></span></div>
+        <div class="info-row"><strong>SDK Status:</strong> <span id="sdkStatus">Loading...</span></div>
+        <div class="info-row"><strong>Subscription:</strong> <span id="subStatus">Not subscribed</span></div>
+        <div class="info-row"><strong>Page Loaded:</strong> <span id="loadTime"></span></div>
         
-        <div id="statusBox" class="status-box status-waiting">
-            ⏳ Waiting for messages from Salesforce...
-        </div>
+        <div id="statusBox" class="status-box status-waiting">⏳ Waiting for messages...</div>
         
         <div style="margin: 20px 0;">
-            <span class="counter" id="messageCounter">0 messages received</span>
-            <button class="send-btn" onclick="sendBackToSalesforce()">📤 Send Message Back to SFDC</button>
-            <button class="clear-btn" onclick="clearMessages()">🗑️ Clear All</button>
+            <span class="counter" id="messageCounter">0 received</span>
+            <button class="send-btn" onclick="sendBackToSalesforce()">📤 Send Back to SFDC</button>
+            <button class="clear-btn" onclick="clearMessages()">🗑️ Clear</button>
         </div>
         
         <div id="latestMessageContainer"></div>
         
         <h2>📜 Message History</h2>
-        <div id="messageHistory">
-            <p style="color:#888; font-style:italic;">No messages yet.</p>
-        </div>
+        <div id="messageHistory"><p style="color:#888;">No messages yet.</p></div>
         
         <div class="log-section">
             <h2>🔍 Debug Log</h2>
@@ -116,199 +54,135 @@
     </div>
 
     <script>
-        // ==============================================
-        // STATE
-        // ==============================================
         let messageCount = 0;
         let messageHistory = [];
-        let targetOrigin = '*'; // Will be set from URL
-        let instanceId = '';
         
-        // ==============================================
-        // PARSE URL FOR TARGET ORIGIN
-        // ==============================================
-        function parseUrl() {
-            const url = window.location.href;
-            
-            // Parse query params and hash
-            const queryAndHash = url.split('?')[1] || '';
-            const allParams = new URLSearchParams(queryAndHash.replace('#', '&'));
-            
-            // Try to extract target_origin
-            let origin = allParams.get('target_origin');
-            
-            // Fallback: parse from hash
-            if (!origin && window.location.hash) {
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                origin = hashParams.get('target_origin');
-            }
-            
-            // Fallback: parse from full URL string
-            if (!origin) {
-                const match = url.match(/target_origin=([^&]+)/);
-                if (match) origin = decodeURIComponent(match[1]);
-            }
-            
-            const instMatch = url.match(/instance_id=([^&]+)/);
-            const inst = instMatch ? decodeURIComponent(instMatch[1]) : '';
-            
-            return { 
-                targetOrigin: origin || '*',
-                instanceId: inst
-            };
-        }
-        
-        const parsed = parseUrl();
-        targetOrigin = parsed.targetOrigin;
-        instanceId = parsed.instanceId;
-        
-        // ==============================================
-        // INIT UI
-        // ==============================================
-        document.getElementById('pageUrl').textContent = window.location.href;
-        document.getElementById('parentOrigin').textContent = document.referrer || 'N/A';
-        document.getElementById('targetOrigin').textContent = targetOrigin;
-        document.getElementById('instanceId').textContent = instanceId;
         document.getElementById('loadTime').textContent = new Date().toLocaleString();
         
-        log('🚀 Canvas page loaded');
-        log('🎯 Target Origin: ' + targetOrigin);
-        log('🆔 Instance ID: ' + instanceId);
-        log('📡 Listening for messages...');
-
-        // ==============================================
-        // UTILITY FUNCTIONS
-        // ==============================================
-        function log(message) {
+        function log(msg) {
             const logEl = document.getElementById('debugLog');
             const time = new Date().toLocaleTimeString();
-            logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
-            console.log(`[${time}] ${message}`);
+            logEl.textContent = `[${time}] ${msg}\n` + logEl.textContent;
+            console.log(`[${time}] ${msg}`);
         }
         
         function updateStatus(received) {
-            const statusBox = document.getElementById('statusBox');
+            const box = document.getElementById('statusBox');
             if (received) {
-                statusBox.className = 'status-box status-received';
-                statusBox.textContent = '✅ Connected! Receiving messages from Salesforce.';
+                box.className = 'status-box status-received';
+                box.textContent = '✅ Connected! Receiving messages.';
             }
         }
         
         function updateCounter() {
-            document.getElementById('messageCounter').textContent = 
-                messageCount + ' message' + (messageCount !== 1 ? 's' : '') + ' received';
+            document.getElementById('messageCounter').textContent = messageCount + ' received';
         }
         
         function clearMessages() {
             messageCount = 0;
             messageHistory = [];
             document.getElementById('latestMessageContainer').innerHTML = '';
-            document.getElementById('messageHistory').innerHTML = 
-                '<p style="color:#888;">Messages cleared.</p>';
+            document.getElementById('messageHistory').innerHTML = '<p style="color:#888;">Cleared.</p>';
             updateCounter();
-            log('🗑️ Cleared');
         }
         
-        function renderLatestMessage(data) {
+        function renderLatest(data) {
             const container = document.getElementById('latestMessageContainer');
             container.innerHTML = `
                 <h2>🎯 Latest Message</h2>
                 <div class="message-card latest">
-                    <div class="message-meta">
-                        Received at ${new Date().toLocaleTimeString()}
-                    </div>
                     <pre>${JSON.stringify(data, null, 2)}</pre>
-                </div>
-            `;
+                </div>`;
         }
         
-        function renderMessageHistory() {
-            const historyEl = document.getElementById('messageHistory');
+        function renderHistory() {
+            const el = document.getElementById('messageHistory');
             if (messageHistory.length === 0) {
-                historyEl.innerHTML = '<p style="color:#888;">No messages.</p>';
+                el.innerHTML = '<p style="color:#888;">No messages.</p>';
                 return;
             }
-            historyEl.innerHTML = messageHistory.map((msg, idx) => `
+            el.innerHTML = messageHistory.map((msg, idx) => `
                 <div class="message-card">
-                    <div class="message-meta">
-                        #${messageHistory.length - idx} | ${msg.time}
-                    </div>
+                    <div style="font-size:12px;color:#666;">#${messageHistory.length - idx} | ${msg.time}</div>
                     <pre>${JSON.stringify(msg.data, null, 2)}</pre>
-                </div>
-            `).join('');
+                </div>`).join('');
         }
         
-        // ==============================================
-        // SEND MESSAGE BACK TO SALESFORCE
-        // ==============================================
+        function processMessage(data) {
+            messageCount++;
+            log('✅ Message #' + messageCount + ' processed');
+            updateStatus(true);
+            updateCounter();
+            renderLatest(data);
+            messageHistory.unshift({ time: new Date().toLocaleTimeString(), data: data });
+            renderHistory();
+        }
+        
         function sendBackToSalesforce() {
+            if (!window.Sfdc || !window.Sfdc.canvas || !window.Sfdc.canvas.client) {
+                log('❌ Canvas SDK not loaded');
+                return;
+            }
+            
             const message = {
-                type: 'CANVAS_TO_SFDC',
                 source: 'GitHub Canvas App',
-                instanceId: instanceId,
-                payload: {
-                    text: 'Hello from Canvas App!',
-                    timestamp: new Date().toISOString(),
-                    random: Math.random().toString(36).substring(7)
-                }
+                text: 'Hello from Canvas!',
+                timestamp: new Date().toISOString(),
+                random: Math.random().toString(36).substring(7)
             };
             
             try {
-                // Send to parent (Salesforce)
-                window.parent.postMessage(message, targetOrigin);
-                log('📤 Sent message to parent (Salesforce): ' + targetOrigin);
-                log('   Payload: ' + JSON.stringify(message));
+                window.Sfdc.canvas.client.publish(null, {
+                    name: 'canvas.messageFromChild',
+                    payload: message
+                });
+                log('📤 Sent to SFDC via Canvas SDK');
             } catch (e) {
-                log('❌ Error sending: ' + e.message);
+                log('❌ Send error: ' + e.message);
             }
         }
-
+        
         // ==============================================
-        // LISTEN FOR MESSAGES FROM SALESFORCE
+        // INITIALIZE CANVAS SDK
         // ==============================================
-        window.addEventListener('message', function(event) {
-            log(`📨 Message from "${event.origin}"`);
-            
-            try {
-                const dataStr = JSON.stringify(event.data).substring(0, 200);
-                log(`   Data: ${dataStr}`);
-            } catch(e) {
-                log('   Data: (non-serializable, possibly Canvas SDK internal)');
+        function initSDK() {
+            if (typeof Sfdc === 'undefined' || !Sfdc.canvas) {
+                log('⏳ Waiting for Canvas SDK...');
+                setTimeout(initSDK, 500);
                 return;
             }
             
-            // Process SFDC messages (any type that we recognize)
-            if (event.data && (event.data.type === 'SFDC_MESSAGE' || event.data.type === 'SFDC_TO_CANVAS')) {
-                messageCount++;
-                log(`✅ Message #${messageCount} processed!`);
+            log('✅ Canvas SDK detected');
+            document.getElementById('sdkStatus').textContent = '✅ Loaded';
+            
+            Sfdc.canvas(function() {
+                log('✅ Canvas SDK ready');
                 
-                updateStatus(true);
-                updateCounter();
-                renderLatestMessage(event.data);
+                // Subscribe to messages from Salesforce parent
+                Sfdc.canvas.client.subscribe(null, [{
+                    name: 'sfdc.canvasMessage',
+                    onData: function(event) {
+                        log('📨 Received via Canvas SDK!');
+                        log('   Data: ' + JSON.stringify(event).substring(0, 100));
+                        processMessage(event);
+                    }
+                }]);
                 
-                messageHistory.unshift({
-                    time: new Date().toLocaleTimeString(),
-                    data: event.data
-                });
-                renderMessageHistory();
+                document.getElementById('subStatus').textContent = '✅ Subscribed';
+                log('✅ Subscribed to "sfdc.canvasMessage"');
+            });
+        }
+        
+        // Also keep the postMessage listener as fallback
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'SFDC_MESSAGE') {
+                log('📨 Received via postMessage fallback');
+                processMessage(event.data.payload);
             }
         }, false);
         
-        log('✅ Listener attached. Ready!');
-        
-        // Send a "ready" signal to parent so SFDC knows the Canvas app is alive
-        setTimeout(function() {
-            try {
-                window.parent.postMessage({
-                    type: 'CANVAS_READY',
-                    instanceId: instanceId,
-                    timestamp: new Date().toISOString()
-                }, targetOrigin);
-                log('📡 Sent CANVAS_READY signal to parent');
-            } catch (e) {
-                log('❌ Could not send ready signal: ' + e.message);
-            }
-        }, 1000);
+        log('🚀 Page loaded, initializing...');
+        initSDK();
     </script>
 </body>
 </html>
