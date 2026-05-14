@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Canvas App - SDK Receiver</title>
+    <title>Canvas App</title>
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f4f6f9; }
         h1 { color: #0070d2; margin-top: 0; }
@@ -21,20 +21,16 @@
         .info-row { margin: 5px 0; font-size: 14px; word-break: break-all; }
         .log-section { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6; }
     </style>
-    
-    <!-- Canvas SDK -->
-    <script src="https://ciscosales--dev.sandbox.my.salesforce.com/canvas/sdk/js/60.0/canvas-all.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>📥 Canvas App - SDK Subscriber</h1>
-        <p>Using <code>Sfdc.canvas.client.subscribe</code> to receive messages from Salesforce.</p>
+        <h1>📥 Canvas App - Iframe Driven</h1>
         
-        <div class="info-row"><strong>SDK Status:</strong> <span id="sdkStatus">Loading...</span></div>
-        <div class="info-row"><strong>Subscription:</strong> <span id="subStatus">Not subscribed</span></div>
         <div class="info-row"><strong>Page Loaded:</strong> <span id="loadTime"></span></div>
+        <div class="info-row"><strong>HELLOs sent:</strong> <span id="helloCount">0</span></div>
+        <div class="info-row"><strong>Connected:</strong> <span id="connStatus">No</span></div>
         
-        <div id="statusBox" class="status-box status-waiting">⏳ Waiting for messages...</div>
+        <div id="statusBox" class="status-box status-waiting">⏳ Sending HELLO to Salesforce...</div>
         
         <div style="margin: 20px 0;">
             <span class="counter" id="messageCounter">0 received</span>
@@ -49,13 +45,16 @@
         
         <div class="log-section">
             <h2>🔍 Debug Log</h2>
-            <pre id="debugLog" style="max-height:300px; overflow-y:auto;"></pre>
+            <pre id="debugLog" style="max-height:400px; overflow-y:auto;"></pre>
         </div>
     </div>
 
     <script>
         let messageCount = 0;
+        let helloCount = 0;
         let messageHistory = [];
+        let connected = false;
+        let helloInterval = null;
         
         document.getElementById('loadTime').textContent = new Date().toLocaleString();
         
@@ -63,14 +62,20 @@
             const logEl = document.getElementById('debugLog');
             const time = new Date().toLocaleTimeString();
             logEl.textContent = `[${time}] ${msg}\n` + logEl.textContent;
-            console.log(`[Canvas] ${msg}`);
+            console.log(`[Canvas iframe] ${msg}`);
         }
         
-        function updateStatus(received) {
+        function updateConnected() {
+            connected = true;
+            document.getElementById('connStatus').textContent = 'Yes ✅';
             const box = document.getElementById('statusBox');
-            if (received) {
-                box.className = 'status-box status-received';
-                box.textContent = '✅ Connected! Receiving messages.';
+            box.className = 'status-box status-received';
+            box.textContent = '✅ Connected to Salesforce!';
+            
+            if (helloInterval) {
+                clearInterval(helloInterval);
+                helloInterval = null;
+                log('🛑 Stopped HELLO broadcast (now connected)');
             }
         }
         
@@ -84,8 +89,7 @@
         
         function processMessage(data) {
             messageCount++;
-            log('✅ Message #' + messageCount + ' processed');
-            updateStatus(true);
+            log('✅ Message #' + messageCount + ' received');
             document.getElementById('messageCounter').textContent = messageCount + ' received';
             
             document.getElementById('latestMessageContainer').innerHTML = `
@@ -104,68 +108,121 @@
                 </div>`).join('');
         }
         
-        function sendBackToSalesforce() {
-            if (!window.Sfdc || !window.Sfdc.canvas || !window.Sfdc.canvas.client) {
-                log('❌ Canvas SDK not loaded');
-                return;
+        // ==============================================
+        // SEND HELLO TO PARENT - Sprays to all ancestors
+        // ==============================================
+        function sendHelloToAllAncestors() {
+            if (connected) return;
+            
+            helloCount++;
+            document.getElementById('helloCount').textContent = helloCount;
+            
+            const helloMessage = {
+                type: 'CANVAS_HELLO',
+                source: 'GitHub Canvas iframe',
+                helloNumber: helloCount,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Strategy 1: Send to direct parent
+            try {
+                window.parent.postMessage(helloMessage, '*');
+                log(`👋 HELLO #${helloCount} sent to window.parent`);
+            } catch (e) {
+                log(`❌ parent failed: ${e.message}`);
             }
             
+            // Strategy 2: Send to top
+            try {
+                if (window.top !== window.parent) {
+                    window.top.postMessage(helloMessage, '*');
+                    log(`👋 HELLO #${helloCount} sent to window.top`);
+                }
+            } catch (e) {
+                log(`❌ top failed: ${e.message}`);
+            }
+            
+            // Strategy 3: Walk up the parent chain
+            try {
+                let w = window.parent;
+                let depth = 0;
+                while (w && w !== window.top && depth < 5) {
+                    try {
+                        w.postMessage({...helloMessage, ancestorDepth: depth}, '*');
+                        log(`👋 HELLO sent to ancestor depth ${depth}`);
+                    } catch(e) {}
+                    w = w.parent;
+                    depth++;
+                }
+            } catch(e) {}
+        }
+        
+        // ==============================================
+        // SEND BACK TO SALESFORCE
+        // ==============================================
+        function sendBackToSalesforce() {
             const message = {
-                source: 'GitHub Canvas App',
-                text: 'Hello from Canvas!',
+                type: 'CANVAS_TO_SFDC',
+                source: 'GitHub Canvas iframe',
+                text: 'Manual message from iframe!',
                 timestamp: new Date().toISOString(),
                 random: Math.random().toString(36).substring(7)
             };
             
             try {
-                window.Sfdc.canvas.client.publish(null, {
-                    name: 'canvas.messageFromChild',
-                    payload: message
-                });
-                log('📤 Sent to SFDC via Canvas SDK');
+                window.parent.postMessage(message, '*');
+                window.top.postMessage(message, '*'); // belt + suspenders
+                log('📤 Sent to parent and top');
             } catch (e) {
-                log('❌ Send error: ' + e.message);
+                log('❌ Send failed: ' + e.message);
             }
         }
         
         // ==============================================
-        // INITIALIZE CANVAS SDK
+        // LISTEN FOR MESSAGES
         // ==============================================
-        function initSDK() {
-            if (typeof Sfdc === 'undefined' || !Sfdc.canvas) {
-                log('⏳ Waiting for Canvas SDK...');
-                setTimeout(initSDK, 500);
-                return;
+        window.addEventListener('message', function(event) {
+            // Filter noise (Lightning sends lots of internal messages)
+            if (!event.data || typeof event.data !== 'object') return;
+            
+            // Only log relevant messages
+            const dataStr = JSON.stringify(event.data).substring(0, 100);
+            
+            // Ignore Salesforce internal messages
+            if (dataStr.includes('aura:') || dataStr.includes('lwc:') || dataStr.includes('lightning')) {
+                return; // skip noise
             }
             
-            log('✅ Canvas SDK detected');
-            document.getElementById('sdkStatus').textContent = '✅ Loaded';
+            log(`📨 Message from "${event.origin}": ${dataStr}`);
             
-            Sfdc.canvas(function() {
-                log('✅ Canvas SDK ready');
+            // Process Salesforce messages
+            if (event.data.type === 'SFDC_HELLO_ACK' || 
+                event.data.type === 'SFDC_TO_CANVAS' || 
+                event.data.type === 'SFDC_MESSAGE') {
                 
-                // Subscribe to messages from Salesforce
-                try {
-                    Sfdc.canvas.client.subscribe(null, [{
-                        name: 'sfdc.canvasMessage',
-                        onData: function(event) {
-                            log('📨 Received via Canvas SDK!');
-                            log('   Data: ' + JSON.stringify(event).substring(0, 100));
-                            processMessage(event);
-                        }
-                    }]);
-                    
-                    document.getElementById('subStatus').textContent = '✅ Subscribed';
-                    log('✅ Subscribed to "sfdc.canvasMessage"');
-                } catch (e) {
-                    log('❌ Subscribe error: ' + e.message);
-                    document.getElementById('subStatus').textContent = '❌ Failed';
+                if (!connected) {
+                    log('🎉 Connection established!');
+                    updateConnected();
                 }
-            });
-        }
+                
+                processMessage(event.data);
+            }
+        }, false);
         
-        log('🚀 Page loaded, initializing...');
-        initSDK();
+        log('🚀 Page loaded. Starting HELLO broadcast...');
+        
+        // Start handshake immediately and retry every 1.5 seconds
+        sendHelloToAllAncestors();
+        helloInterval = setInterval(sendHelloToAllAncestors, 1500);
+        
+        // Stop after 30 seconds to avoid spam
+        setTimeout(function() {
+            if (helloInterval) {
+                clearInterval(helloInterval);
+                helloInterval = null;
+                log('🛑 HELLO broadcast timeout (30s). Click button to retry.');
+            }
+        }, 30000);
     </script>
 </body>
 </html>
