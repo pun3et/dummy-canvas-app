@@ -133,14 +133,14 @@
             }
             
            // Strategy 2: Send to top
-            try {
-                if (window.top !== window.parent) {
-                    window.top.postMessage(helloMessage, '*');
-                    log(`👋 HELLO #${helloCount} sent to window.top`);
-                }
-            } catch (e) {
-                log(`❌ top failed: ${e.message}`);
-            }
+            // try {
+            //     if (window.top !== window.parent) {
+            //         window.top.postMessage(helloMessage, '*');
+            //         log(`👋 HELLO #${helloCount} sent to window.top`);
+            //     }
+            // } catch (e) {
+            //     log(`❌ top failed: ${e.message}`);
+            // }
             
             // Strategy 3: Walk up the parent chain
             // try {
