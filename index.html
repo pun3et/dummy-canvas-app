@@ -132,7 +132,7 @@
                 log(`❌ parent failed: ${e.message}`);
             }
             
-            Strategy 2: Send to top
+           // Strategy 2: Send to top
             try {
                 if (window.top !== window.parent) {
                     window.top.postMessage(helloMessage, '*');
