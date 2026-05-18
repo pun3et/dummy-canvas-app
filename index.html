@@ -133,28 +133,28 @@
             }
             
             // Strategy 2: Send to top
-            try {
-                if (window.top !== window.parent) {
-                    window.top.postMessage(helloMessage, '*');
-                    log(`👋 HELLO #${helloCount} sent to window.top`);
-                }
-            } catch (e) {
-                log(`❌ top failed: ${e.message}`);
-            }
+            // try {
+            //     if (window.top !== window.parent) {
+            //         window.top.postMessage(helloMessage, '*');
+            //         log(`👋 HELLO #${helloCount} sent to window.top`);
+            //     }
+            // } catch (e) {
+            //     log(`❌ top failed: ${e.message}`);
+            // }
             
             // Strategy 3: Walk up the parent chain
-            try {
-                let w = window.parent;
-                let depth = 0;
-                while (w && w !== window.top && depth < 5) {
-                    try {
-                        w.postMessage({...helloMessage, ancestorDepth: depth}, '*');
-                        log(`👋 HELLO sent to ancestor depth ${depth}`);
-                    } catch(e) {}
-                    w = w.parent;
-                    depth++;
-                }
-            } catch(e) {}
+            // try {
+            //     let w = window.parent;
+            //     let depth = 0;
+            //     while (w && w !== window.top && depth < 5) {
+            //         try {
+            //             w.postMessage({...helloMessage, ancestorDepth: depth}, '*');
+            //             log(`👋 HELLO sent to ancestor depth ${depth}`);
+            //         } catch(e) {}
+            //         w = w.parent;
+            //         depth++;
+            //     }
+            // } catch(e) {}
         }
         
         // ==============================================
